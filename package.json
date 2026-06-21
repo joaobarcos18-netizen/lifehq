@@ -1,6 +1,6 @@
 {
   "name": "lifehq",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "LifeHQ — your personal life operating system",
   "author": "Joao",
   "main": "./out/main/index.js",
