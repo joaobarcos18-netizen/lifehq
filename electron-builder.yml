@@ -1,5 +1,9 @@
 appId: com.joao.lifehq
 productName: LifeHQ
+publish:
+  provider: github
+  owner: joaobarcos18-netizen
+  repo: lifehq
 directories:
   output: dist
   buildResources: build
