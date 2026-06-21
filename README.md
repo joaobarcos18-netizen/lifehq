@@ -63,6 +63,26 @@ unless **Developer Mode** is on or the shell is elevated. Two ways to handle it:
    $env:CSC_IDENTITY_AUTO_DISCOVERY='false'; npx electron-builder --win
    ```
 
+## Auto-updates & releasing
+
+LifeHQ auto-updates from GitHub Releases (repo:
+[joaobarcos18-netizen/lifehq](https://github.com/joaobarcos18-netizen/lifehq)). The installed app
+checks for a newer version on startup and, when one is downloaded, offers **Restart now** to apply
+it. Your vault/data is never touched.
+
+To ship an update:
+
+1. Bump the version in `package.json` (e.g. `0.1.0` → `0.1.1`).
+2. Make sure `gh` is authenticated, then:
+   ```powershell
+   $env:GH_TOKEN = (gh auth token); $env:CSC_IDENTITY_AUTO_DISCOVERY='false'; npm run release
+   ```
+   This builds and publishes a new GitHub Release with the installer + `latest.yml`.
+3. Installed apps pick it up automatically on their next launch.
+
+(The dev launcher — the Desktop/Start shortcut — always runs the local build, so it doesn't need
+releases; just rebuild and reopen.)
+
 ## Tech
 
 - **Electron** + **React** + **TypeScript**, bundled with **electron-vite**.
