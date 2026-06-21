@@ -1,7 +1,6 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls.js'
-import { Sky } from 'three/examples/jsm/objects/Sky.js'
 
 export interface BlockData {
   id: string
@@ -27,11 +26,11 @@ const REGION_SIZE = 12
 const PAN_SPEED = 0.4
 
 const EYE = 1.7
-const WALK_SPEED = 6
+const WALK_SPEED = 5.2
 const SPRINT_MULT = 1.8
-const GRAVITY = 22
-const JUMP_V = 8
-const BOB_AMP = 0.06
+const GRAVITY = 24
+const JUMP_V = 8.4
+const BOB_AMP = 0.05
 const BOB_FREQ = 9
 
 interface EngineCallbacks {
@@ -53,9 +52,12 @@ export class WorldEngine {
   private pointer = new THREE.Vector2()
   private center = new THREE.Vector2(0, 0)
   private clock = new THREE.Clock()
-  private ground: THREE.Mesh
+  private elapsed = 0
+  private ground!: THREE.Mesh
   private ghost: THREE.Mesh
   private held: THREE.Mesh
+  private outline: THREE.LineSegments
+  private clouds: THREE.Mesh[] = []
   private blocksGroup = new THREE.Group()
   private regionsGroup = new THREE.Group()
   private blockMeshes = new Map<string, THREE.Mesh>()
@@ -81,17 +83,17 @@ export class WorldEngine {
     this.cb = cb
 
     this.scene = new THREE.Scene()
-    this.scene.fog = new THREE.Fog(new THREE.Color(0xb8d4ea), GROUND * 1.1, GROUND * 2.6)
+    const horizon = new THREE.Color(0xbfe3ff)
+    this.scene.fog = new THREE.Fog(horizon, GROUND * 0.95, GROUND * 1.9)
 
-    this.camera = new THREE.PerspectiveCamera(70, 1, 0.1, 1000)
-    this.camera.position.set(20, 24, 26)
+    this.camera = new THREE.PerspectiveCamera(72, 1, 0.1, 1000)
+    this.camera.position.set(18, 22, 24)
     this.scene.add(this.camera)
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.outputColorSpace = THREE.SRGBColorSpace
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping
-    this.renderer.toneMappingExposure = 0.55
+    this.renderer.toneMapping = THREE.NoToneMapping
     this.renderer.shadowMap.enabled = true
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap
     container.appendChild(this.renderer.domElement)
@@ -104,7 +106,7 @@ export class WorldEngine {
     this.orbit.dampingFactor = 0.08
     this.orbit.target.set(0, 1, 0)
     this.orbit.maxPolarAngle = Math.PI / 2 - 0.04
-    this.orbit.minDistance = 4
+    this.orbit.minDistance = 3
     this.orbit.maxDistance = GROUND * 1.2
 
     this.walk = new PointerLockControls(this.camera, this.renderer.domElement)
@@ -117,76 +119,37 @@ export class WorldEngine {
       this.cb.onLockChange(false)
     })
 
-    // ----- Sky + sun -----
-    const sky = new Sky()
-    sky.scale.setScalar(GROUND * 60)
-    this.scene.add(sky)
-    const sun = new THREE.Vector3()
-    const elevation = 24
-    const azimuth = 135
-    const phi = THREE.MathUtils.degToRad(90 - elevation)
-    const theta = THREE.MathUtils.degToRad(azimuth)
-    sun.setFromSphericalCoords(1, phi, theta)
-    const u = sky.material.uniforms
-    u['turbidity'].value = 8
-    u['rayleigh'].value = 1.6
-    u['mieCoefficient'].value = 0.005
-    u['mieDirectionalG'].value = 0.8
-    u['sunPosition'].value.copy(sun)
-
-    // ----- Lights -----
-    this.scene.add(new THREE.HemisphereLight(0xbcd9ff, 0x4a5a3a, 0.55))
-    const dir = new THREE.DirectionalLight(0xfff2d8, 2.4)
-    dir.position.copy(sun).multiplyScalar(80)
-    dir.castShadow = true
-    dir.shadow.mapSize.set(2048, 2048)
-    dir.shadow.camera.near = 1
-    dir.shadow.camera.far = 260
-    const s = HALF * 0.8
-    dir.shadow.camera.left = -s
-    dir.shadow.camera.right = s
-    dir.shadow.camera.top = s
-    dir.shadow.camera.bottom = -s
-    dir.shadow.bias = -0.0004
-    this.scene.add(dir)
-    this.scene.add(dir.target)
-
-    // ----- Ground -----
-    this.ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(GROUND, GROUND),
-      new THREE.MeshStandardMaterial({ map: makeGroundTexture(), roughness: 1, metalness: 0 })
-    )
-    this.ground.rotation.x = -Math.PI / 2
-    this.ground.receiveShadow = true
-    this.ground.name = 'ground'
-    this.scene.add(this.ground)
-
-    const edge = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.BoxGeometry(GROUND, 0.02, GROUND)),
-      new THREE.LineBasicMaterial({ color: 0x6f8f63 })
-    )
-    edge.position.y = 0.02
-    this.scene.add(edge)
+    this.buildSky(horizon)
+    this.buildLights()
+    this.buildGround()
 
     this.scene.add(this.regionsGroup)
     this.scene.add(this.blocksGroup)
 
+    // placement ghost
     this.ghost = new THREE.Mesh(
-      new THREE.BoxGeometry(0.96, 0.96, 0.96),
-      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false })
+      new THREE.BoxGeometry(1, 1, 1),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.5, depthWrite: false })
     )
     this.ghost.visible = false
     this.scene.add(this.ghost)
 
-    // held photo (walk mode "in hand")
+    // block-targeting outline (Minecraft selection box)
+    this.outline = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(1.02, 1.02, 1.02)),
+      new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.5 })
+    )
+    this.outline.visible = false
+    this.scene.add(this.outline)
+
+    // held photo (walk "in hand")
     this.held = new THREE.Mesh(
       new THREE.PlaneGeometry(0.5, 0.5),
       new THREE.MeshBasicMaterial({ transparent: true })
     )
-    this.held.position.set(0.46, -0.34, -1)
-    this.held.rotation.set(0.1, -0.25, 0.06)
+    this.held.position.set(0.5, -0.36, -1)
+    this.held.rotation.set(0.12, -0.3, 0.05)
     this.held.visible = false
-    this.held.renderOrder = 999
     this.camera.add(this.held)
 
     const el = this.renderer.domElement
@@ -203,6 +166,118 @@ export class WorldEngine {
 
     this.renderer.setAnimationLoop(this.animate)
   }
+
+  /* ----------------------------- World build ----------------------------- */
+
+  private buildSky(horizon: THREE.Color) {
+    // gradient sky dome
+    const skyGeo = new THREE.SphereGeometry(GROUND * 3, 32, 16)
+    const skyMat = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      uniforms: {
+        top: { value: new THREE.Color(0x4f9be8) },
+        bottom: { value: horizon }
+      },
+      vertexShader: `varying vec3 vP; void main(){ vP = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`,
+      fragmentShader: `varying vec3 vP; uniform vec3 top; uniform vec3 bottom;
+        void main(){ float h = clamp((normalize(vP).y + 0.1) / 0.7, 0.0, 1.0); gl_FragColor = vec4(mix(bottom, top, h), 1.0); }`
+    })
+    this.scene.add(new THREE.Mesh(skyGeo, skyMat))
+
+    // blocky sun
+    const sun = new THREE.Mesh(
+      new THREE.PlaneGeometry(14, 14),
+      new THREE.MeshBasicMaterial({ map: sunTexture(), transparent: true, depthWrite: false, fog: false })
+    )
+    sun.position.set(-60, 70, -90)
+    sun.lookAt(0, 0, 0)
+    this.scene.add(sun)
+
+    // drifting pixel clouds
+    const cloudTex = cloudTexture()
+    for (let i = 0; i < 14; i++) {
+      const size = 10 + ((i * 7) % 16)
+      const cloud = new THREE.Mesh(
+        new THREE.PlaneGeometry(size, size * 0.6),
+        new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, opacity: 0.85, depthWrite: false, fog: false })
+      )
+      cloud.rotation.x = -Math.PI / 2
+      cloud.position.set(((i * 53) % GROUND) - HALF, 34 + (i % 3) * 4, ((i * 91) % GROUND) - HALF)
+      this.scene.add(cloud)
+      this.clouds.push(cloud)
+    }
+  }
+
+  private buildLights() {
+    this.scene.add(new THREE.HemisphereLight(0xcfe6ff, 0x5a6a3a, 0.85))
+    const dir = new THREE.DirectionalLight(0xffffff, 1.7)
+    dir.position.set(-40, 60, -40)
+    dir.castShadow = true
+    dir.shadow.mapSize.set(2048, 2048)
+    dir.shadow.camera.near = 1
+    dir.shadow.camera.far = 220
+    const s = HALF * 0.85
+    dir.shadow.camera.left = -s
+    dir.shadow.camera.right = s
+    dir.shadow.camera.top = s
+    dir.shadow.camera.bottom = -s
+    dir.shadow.bias = -0.0005
+    this.scene.add(dir)
+    this.scene.add(dir.target)
+  }
+
+  private buildGround() {
+    // invisible plane at the grass surface (y=0) used for raycasting placement cells
+    this.ground = new THREE.Mesh(
+      new THREE.PlaneGeometry(GROUND, GROUND),
+      new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false })
+    )
+    this.ground.rotation.x = -Math.PI / 2
+    this.ground.name = 'ground'
+    this.scene.add(this.ground)
+
+    // grass blocks (top layer, occupy y[-1,0]) via instancing
+    const grassMats = [grassSideTex(), grassSideTex(), grassTopTex(), dirtTex(), grassSideTex(), grassSideTex()].map(
+      (t) => new THREE.MeshLambertMaterial({ map: t })
+    )
+    const geo = new THREE.BoxGeometry(1, 1, 1)
+    const n = (GROUND + 1) * (GROUND + 1)
+    const grass = new THREE.InstancedMesh(geo, grassMats, n)
+    grass.receiveShadow = true
+    grass.castShadow = false
+    const m = new THREE.Matrix4()
+    let i = 0
+    for (let x = -HALF; x <= HALF; x++) {
+      for (let z = -HALF; z <= HALF; z++) {
+        m.setPosition(x, -0.5, z)
+        grass.setMatrixAt(i++, m)
+      }
+    }
+    grass.instanceMatrix.needsUpdate = true
+    this.scene.add(grass)
+
+    // earth cross-section beneath, so edges look deep
+    const dirtT = dirtTex()
+    dirtT.repeat.set(GROUND, 5)
+    const stoneT = stoneTex()
+    stoneT.repeat.set(GROUND, 5)
+    const under = new THREE.Mesh(
+      new THREE.BoxGeometry(GROUND + 1, 6, GROUND + 1),
+      [
+        new THREE.MeshLambertMaterial({ map: dirtT }),
+        new THREE.MeshLambertMaterial({ map: dirtT }),
+        new THREE.MeshLambertMaterial({ map: stoneT }),
+        new THREE.MeshLambertMaterial({ map: stoneT }),
+        new THREE.MeshLambertMaterial({ map: dirtT }),
+        new THREE.MeshLambertMaterial({ map: dirtT })
+      ]
+    )
+    under.position.set(0, -4, 0)
+    this.scene.add(under)
+  }
+
+  /* ----------------------------- Public API ----------------------------- */
 
   setUrlResolver(fn: (photoId: string) => string | null) {
     this.resolveUrl = fn
@@ -233,6 +308,7 @@ export class WorldEngine {
       if (this.locked) this.walk.unlock()
       this.orbit.enabled = true
       this.held.visible = false
+      this.outline.visible = false
       const fwd = new THREE.Vector3()
       this.camera.getWorldDirection(fwd)
       const t = this.camera.position.clone().add(fwd.multiplyScalar(8))
@@ -255,8 +331,7 @@ export class WorldEngine {
       const tex = this.getTexture(url)
       const gmat = this.ghost.material as THREE.MeshBasicMaterial
       gmat.map = tex
-      gmat.color.set(0xffffff)
-      gmat.opacity = 0.6
+      gmat.opacity = 0.55
       gmat.needsUpdate = true
       const hmat = this.held.material as THREE.MeshBasicMaterial
       hmat.map = tex
@@ -265,40 +340,23 @@ export class WorldEngine {
     }
   }
 
-  /** Framed, aspect-correct photo texture (cached). */
+  /** Framed, aspect-correct photo texture in a wood frame (cached). */
   private getTexture(url: string): THREE.Texture {
     const cached = this.textureCache.get(url)
     if (cached) return cached
-    const size = 512
+    const size = 256
     const canvas = document.createElement('canvas')
     canvas.width = canvas.height = size
     const ctx = canvas.getContext('2d')!
-    ctx.fillStyle = '#f6f3ec'
-    ctx.fillRect(0, 0, size, size)
-    ctx.fillStyle = '#11151d'
-    const pad = size * 0.06
-    ctx.fillRect(pad, pad, size - 2 * pad, size - 2 * pad)
+    drawFrame(ctx, size, null)
     const tex = new THREE.CanvasTexture(canvas)
     tex.colorSpace = THREE.SRGBColorSpace
+    tex.magFilter = THREE.LinearFilter
     tex.anisotropy = 4
     this.textureCache.set(url, tex)
-
     const img = new Image()
     img.onload = () => {
-      ctx.fillStyle = '#f6f3ec'
-      ctx.fillRect(0, 0, size, size)
-      const inner = size - 2 * pad
-      ctx.fillStyle = '#11151d'
-      ctx.fillRect(pad, pad, inner, inner)
-      const ar = img.width / img.height || 1
-      let w = inner
-      let h = inner
-      if (ar > 1) h = inner / ar
-      else w = inner * ar
-      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h)
-      ctx.strokeStyle = '#d8d2c4'
-      ctx.lineWidth = 3
-      ctx.strokeRect(2, 2, size - 4, size - 4)
+      drawFrame(ctx, size, img)
       tex.needsUpdate = true
     }
     img.onerror = () => {}
@@ -347,8 +405,8 @@ export class WorldEngine {
         obj.traverse((o) => {
           if (o instanceof THREE.Mesh || o instanceof THREE.Sprite) {
             o.geometry?.dispose?.()
-            const m = o.material as THREE.Material | THREE.Material[]
-            ;(Array.isArray(m) ? m : [m]).forEach((x) => x.dispose())
+            const mm = o.material as THREE.Material | THREE.Material[]
+            ;(Array.isArray(mm) ? mm : [mm]).forEach((x) => x.dispose())
           }
         })
         this.regionObjs.delete(id)
@@ -369,22 +427,13 @@ export class WorldEngine {
     const group = new THREE.Group()
     const patch = new THREE.Mesh(
       new THREE.PlaneGeometry(REGION_SIZE, REGION_SIZE),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(r.color), transparent: true, opacity: 0.16, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: new THREE.Color(r.color), transparent: true, opacity: 0.18, depthWrite: false })
     )
     patch.rotation.x = -Math.PI / 2
-    patch.position.y = 0.04
+    patch.position.y = 0.05
     group.add(patch)
-
-    const border = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.PlaneGeometry(REGION_SIZE, REGION_SIZE)),
-      new THREE.LineBasicMaterial({ color: new THREE.Color(r.color), transparent: true, opacity: 0.7 })
-    )
-    border.rotation.x = -Math.PI / 2
-    border.position.y = 0.05
-    group.add(border)
-
     const label = makeLabelSprite(r.name, r.color)
-    label.position.set(0, 3.2, 0)
+    label.position.set(0, 3.4, 0)
     group.add(label)
     return group
   }
@@ -392,11 +441,11 @@ export class WorldEngine {
   private makeBlock(b: BlockData): THREE.Mesh {
     const url = this.resolveUrl(b.photoId)
     const photoMat = url
-      ? new THREE.MeshStandardMaterial({ map: this.getTexture(url), roughness: 0.85 })
-      : new THREE.MeshStandardMaterial({ color: 0x445066 })
-    const frame = new THREE.MeshStandardMaterial({ color: 0xece7db, roughness: 0.9 })
+      ? new THREE.MeshLambertMaterial({ map: this.getTexture(url) })
+      : new THREE.MeshLambertMaterial({ color: 0x6b7686 })
+    const frame = new THREE.MeshLambertMaterial({ map: woodTex() })
     const materials = [photoMat, photoMat, frame, frame, photoMat, photoMat]
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.94, 0.94), materials)
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), materials)
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.userData.blockId = b.id
@@ -460,18 +509,24 @@ export class WorldEngine {
     if (this.mode !== 'orbit') return
     this.updatePointer(e)
     this.raycaster.setFromCamera(this.pointer, this.camera)
-    const hit = this.raycaster.intersectObject(this.ground)[0]
-    if (hit) {
-      const x = Math.round(hit.point.x)
-      const z = Math.round(hit.point.z)
+    const blockHit = this.raycaster.intersectObjects(this.blocksGroup.children)[0]
+    const groundHit = this.raycaster.intersectObject(this.ground)[0]
+    if (blockHit && (!groundHit || blockHit.distance <= groundHit.distance)) {
+      this.outline.position.copy((blockHit.object as THREE.Mesh).position)
+      this.outline.visible = true
+    } else if (groundHit) {
+      const x = Math.round(groundHit.point.x)
+      const z = Math.round(groundHit.point.z)
       this.lastGroundCell = { x, z }
+      this.outline.position.set(x, -0.5, z)
+      this.outline.visible = true
       if (this.placementUrl) {
         this.ghost.position.set(x, this.floorAt(x, z) + 0.5, z)
         this.ghost.visible = true
         this.cb.onHoverCell({ x, z })
       }
     } else {
-      this.lastGroundCell = null
+      this.outline.visible = false
       if (this.placementUrl) {
         this.ghost.visible = false
         this.cb.onHoverCell(null)
@@ -530,6 +585,12 @@ export class WorldEngine {
 
   private animate = () => {
     const dt = Math.min(this.clock.getDelta(), 0.05)
+    this.elapsed += dt
+    // drift clouds
+    for (const c of this.clouds) {
+      c.position.x += dt * 0.6
+      if (c.position.x > HALF + 12) c.position.x = -HALF - 12
+    }
     if (this.mode === 'orbit') {
       if (this.keys.size) this.applyPan()
       this.orbit.update()
@@ -572,6 +633,19 @@ export class WorldEngine {
       moving = f !== 0 || r !== 0
       this.camera.position.x = clamp(this.camera.position.x, -HALF + 0.5, HALF - 0.5)
       this.camera.position.z = clamp(this.camera.position.z, -HALF + 0.5, HALF - 0.5)
+      // selection outline from crosshair
+      this.raycaster.setFromCamera(this.center, this.camera)
+      const bHit = this.raycaster.intersectObjects(this.blocksGroup.children)[0]
+      const gHit = this.raycaster.intersectObject(this.ground)[0]
+      if (bHit && bHit.distance < 18) {
+        this.outline.position.copy((bHit.object as THREE.Mesh).position)
+        this.outline.visible = true
+      } else if (gHit && gHit.distance < 18) {
+        this.outline.position.set(Math.round(gHit.point.x), -0.5, Math.round(gHit.point.z))
+        this.outline.visible = true
+      } else {
+        this.outline.visible = false
+      }
     }
     let feet = this.camera.position.y - EYE
     this.vy -= GRAVITY * dt
@@ -584,7 +658,6 @@ export class WorldEngine {
     } else {
       this.onGround = false
     }
-    // head-bob while walking on ground
     let bob = 0
     if (moving && this.onGround) {
       this.bobPhase += dt * BOB_FREQ
@@ -605,7 +678,7 @@ export class WorldEngine {
 
   resetCamera() {
     if (this.mode === 'walk') this.setMode('orbit')
-    this.camera.position.set(20, 24, 26)
+    this.camera.position.set(18, 22, 24)
     this.orbit.target.set(0, 1, 0)
   }
 
@@ -631,7 +704,7 @@ export class WorldEngine {
     if (this.locked) this.walk.unlock()
     this.walk.dispose()
     this.orbit.dispose()
-    this.blockMeshes.forEach((m) => disposeMesh(m))
+    this.blockMeshes.forEach((mm) => disposeMesh(mm))
     this.textureCache.forEach((t) => t.dispose())
     this.renderer.dispose()
     if (el.parentElement) el.parentElement.removeChild(el)
@@ -641,6 +714,8 @@ export class WorldEngine {
     return { GROUND, HALF }
   }
 }
+
+/* ----------------------------- helpers ----------------------------- */
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v))
@@ -656,7 +731,118 @@ function isTyping(): boolean {
 function disposeMesh(mesh: THREE.Mesh) {
   mesh.geometry.dispose()
   const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-  mats.forEach((m) => m.dispose())
+  mats.forEach((mm) => mm.dispose())
+}
+
+function pixelCanvas(size = 16): { canvas: HTMLCanvasElement; ctx: CanvasRenderingContext2D } {
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  return { canvas, ctx: canvas.getContext('2d')! }
+}
+
+function pixelTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.magFilter = THREE.NearestFilter
+  tex.minFilter = THREE.NearestFilter
+  tex.wrapS = THREE.RepeatWrapping
+  tex.wrapT = THREE.RepeatWrapping
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+function speckle(ctx: CanvasRenderingContext2D, size: number, cols: string[], from = 0, to = size) {
+  for (let x = 0; x < size; x++) {
+    for (let y = from; y < to; y++) {
+      ctx.fillStyle = cols[(x * 7 + y * 13) % cols.length]
+      ctx.fillRect(x, y, 1, 1)
+    }
+  }
+}
+
+function grassTopTex(): THREE.CanvasTexture {
+  const { canvas, ctx } = pixelCanvas()
+  speckle(ctx, 16, ['#5fa548', '#69b052', '#578f43', '#62a84d'])
+  return pixelTexture(canvas)
+}
+
+function grassSideTex(): THREE.CanvasTexture {
+  const { canvas, ctx } = pixelCanvas()
+  speckle(ctx, 16, ['#8a6239', '#7d5832', '#946a3f', '#82613a']) // dirt base
+  speckle(ctx, 16, ['#5fa548', '#69b052', '#578f43'], 0, 4) // grass top strip
+  // a few grass dribbles
+  ctx.fillStyle = '#578f43'
+  for (let x = 0; x < 16; x += 3) ctx.fillRect(x, 4, 1, 1)
+  return pixelTexture(canvas)
+}
+
+function dirtTex(): THREE.CanvasTexture {
+  const { canvas, ctx } = pixelCanvas()
+  speckle(ctx, 16, ['#8a6239', '#7d5832', '#946a3f', '#74522e'])
+  return pixelTexture(canvas)
+}
+
+function stoneTex(): THREE.CanvasTexture {
+  const { canvas, ctx } = pixelCanvas()
+  speckle(ctx, 16, ['#8b8f96', '#7e828a', '#969aa1', '#787c84'])
+  return pixelTexture(canvas)
+}
+
+function woodTex(): THREE.CanvasTexture {
+  const { canvas, ctx } = pixelCanvas()
+  speckle(ctx, 16, ['#9a6b3c', '#8a5d33', '#a4743f', '#825634'])
+  return pixelTexture(canvas)
+}
+
+function sunTexture(): THREE.CanvasTexture {
+  const { canvas, ctx } = pixelCanvas(16)
+  ctx.fillStyle = 'rgba(0,0,0,0)'
+  ctx.fillRect(0, 0, 16, 16)
+  ctx.fillStyle = '#fff4c2'
+  ctx.fillRect(2, 2, 12, 12)
+  ctx.fillStyle = '#ffe98a'
+  ctx.fillRect(3, 3, 10, 10)
+  return pixelTexture(canvas)
+}
+
+function cloudTexture(): THREE.CanvasTexture {
+  const size = 16
+  const { canvas, ctx } = pixelCanvas(size)
+  ctx.clearRect(0, 0, size, size)
+  ctx.fillStyle = '#ffffff'
+  const cells = [
+    [3, 6],[4, 6],[5, 5],[6, 5],[7, 5],[8, 6],[9, 6],[10, 7],
+    [4, 7],[5, 6],[6, 6],[7, 6],[8, 7],[9, 7],[5, 7],[6, 7],[7, 7],[8, 8],[6, 8],[7, 8]
+  ]
+  for (const [x, y] of cells) ctx.fillRect(x, y, 1, 1)
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.magFilter = THREE.NearestFilter
+  tex.minFilter = THREE.NearestFilter
+  tex.colorSpace = THREE.SRGBColorSpace
+  return tex
+}
+
+function drawFrame(ctx: CanvasRenderingContext2D, size: number, img: HTMLImageElement | null) {
+  // wooden frame
+  ctx.fillStyle = '#8a5d33'
+  ctx.fillRect(0, 0, size, size)
+  ctx.fillStyle = '#6f4a28'
+  ctx.fillRect(0, 0, size, size)
+  const pad = Math.round(size * 0.09)
+  const inner = size - 2 * pad
+  ctx.fillStyle = '#11151d'
+  ctx.fillRect(pad, pad, inner, inner)
+  if (img) {
+    const ar = img.width / img.height || 1
+    let w = inner
+    let h = inner
+    if (ar > 1) h = inner / ar
+    else w = inner * ar
+    ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h)
+  }
+  // frame bevel
+  ctx.strokeStyle = '#a4743f'
+  ctx.lineWidth = Math.max(2, size * 0.012)
+  ctx.strokeRect(2, 2, size - 4, size - 4)
 }
 
 function makeLabelSprite(text: string, color: string): THREE.Sprite {
@@ -679,12 +865,10 @@ function makeLabelSprite(text: string, color: string): THREE.Sprite {
   ctx.fillStyle = '#ffffff'
   ctx.textBaseline = 'middle'
   ctx.fillText(text, padding, canvas.height / 2 + 2)
-
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }))
-  const scale = 0.035
-  sprite.scale.set(canvas.width * scale, canvas.height * scale, 1)
+  sprite.scale.set(canvas.width * 0.035, canvas.height * 0.035, 1)
   return sprite
 }
 
@@ -696,27 +880,4 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.arcTo(x, y + h, x, y, r)
   ctx.arcTo(x, y, x + w, y, r)
   ctx.closePath()
-}
-
-function makeGroundTexture(): THREE.Texture {
-  const c = document.createElement('canvas')
-  c.width = 32
-  c.height = 32
-  const ctx = c.getContext('2d')!
-  ctx.fillStyle = '#4f8a43'
-  ctx.fillRect(0, 0, 32, 32)
-  for (let i = 0; i < 48; i++) {
-    ctx.fillStyle = Math.random() > 0.5 ? '#57964a' : '#447a3a'
-    ctx.fillRect(Math.floor(Math.random() * 32), Math.floor(Math.random() * 32), 2, 2)
-  }
-  ctx.strokeStyle = '#3c6e34'
-  ctx.lineWidth = 2
-  ctx.strokeRect(0, 0, 32, 32)
-  const tex = new THREE.CanvasTexture(c)
-  tex.wrapS = THREE.RepeatWrapping
-  tex.wrapT = THREE.RepeatWrapping
-  tex.magFilter = THREE.NearestFilter
-  tex.repeat.set(GROUND, GROUND)
-  tex.colorSpace = THREE.SRGBColorSpace
-  return tex
 }
