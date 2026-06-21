@@ -185,25 +185,21 @@ export class WorldEngine {
     })
     this.scene.add(new THREE.Mesh(skyGeo, skyMat))
 
-    // blocky sun
-    const sun = new THREE.Mesh(
-      new THREE.PlaneGeometry(14, 14),
-      new THREE.MeshBasicMaterial({ map: sunTexture(), transparent: true, depthWrite: false, fog: false })
+    // blocky sun (billboarded so it's always visible)
+    const sun = new THREE.Sprite(
+      new THREE.SpriteMaterial({ map: sunTexture(), transparent: true, depthWrite: false, fog: false })
     )
-    sun.position.set(-60, 70, -90)
-    sun.lookAt(0, 0, 0)
+    sun.scale.set(13, 13, 1)
+    sun.position.set(38, 52, -58)
     this.scene.add(sun)
 
-    // drifting pixel clouds
-    const cloudTex = cloudTexture()
-    for (let i = 0; i < 14; i++) {
-      const size = 10 + ((i * 7) % 16)
-      const cloud = new THREE.Mesh(
-        new THREE.PlaneGeometry(size, size * 0.6),
-        new THREE.MeshBasicMaterial({ map: cloudTex, transparent: true, opacity: 0.85, depthWrite: false, fog: false })
-      )
-      cloud.rotation.x = -Math.PI / 2
-      cloud.position.set(((i * 53) % GROUND) - HALF, 34 + (i % 3) * 4, ((i * 91) % GROUND) - HALF)
+    // drifting blocky clouds (flattened white boxes, visible from any angle)
+    const cloudMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9, fog: false })
+    for (let i = 0; i < 18; i++) {
+      const w = 7 + ((i * 5) % 16)
+      const d = 5 + ((i * 11) % 11)
+      const cloud = new THREE.Mesh(new THREE.BoxGeometry(w, 2, d), cloudMat)
+      cloud.position.set(((i * 53) % (GROUND * 2)) - GROUND, 22 + (i % 4) * 3, ((i * 97) % (GROUND * 2)) - GROUND)
       this.scene.add(cloud)
       this.clouds.push(cloud)
     }
@@ -433,7 +429,7 @@ export class WorldEngine {
     patch.position.y = 0.05
     group.add(patch)
     const label = makeLabelSprite(r.name, r.color)
-    label.position.set(0, 3.4, 0)
+    label.position.set(0, 2.6, 0)
     group.add(label)
     return group
   }
@@ -588,8 +584,8 @@ export class WorldEngine {
     this.elapsed += dt
     // drift clouds
     for (const c of this.clouds) {
-      c.position.x += dt * 0.6
-      if (c.position.x > HALF + 12) c.position.x = -HALF - 12
+      c.position.x += dt * 0.7
+      if (c.position.x > GROUND) c.position.x = -GROUND
     }
     if (this.mode === 'orbit') {
       if (this.keys.size) this.applyPan()
@@ -761,14 +757,14 @@ function speckle(ctx: CanvasRenderingContext2D, size: number, cols: string[], fr
 
 function grassTopTex(): THREE.CanvasTexture {
   const { canvas, ctx } = pixelCanvas()
-  speckle(ctx, 16, ['#5fa548', '#69b052', '#578f43', '#62a84d'])
+  speckle(ctx, 16, ['#5ea64a', '#5aa146', '#61a94d', '#5ca548'])
   return pixelTexture(canvas)
 }
 
 function grassSideTex(): THREE.CanvasTexture {
   const { canvas, ctx } = pixelCanvas()
-  speckle(ctx, 16, ['#8a6239', '#7d5832', '#946a3f', '#82613a']) // dirt base
-  speckle(ctx, 16, ['#5fa548', '#69b052', '#578f43'], 0, 4) // grass top strip
+  speckle(ctx, 16, ['#8a6239', '#82603a', '#876138', '#7f5c36']) // dirt base
+  speckle(ctx, 16, ['#5ea64a', '#5aa146', '#61a94d'], 0, 4) // grass top strip
   // a few grass dribbles
   ctx.fillStyle = '#578f43'
   for (let x = 0; x < 16; x += 3) ctx.fillRect(x, 4, 1, 1)
@@ -867,8 +863,8 @@ function makeLabelSprite(text: string, color: string): THREE.Sprite {
   ctx.fillText(text, padding, canvas.height / 2 + 2)
   const tex = new THREE.CanvasTexture(canvas)
   tex.colorSpace = THREE.SRGBColorSpace
-  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }))
-  sprite.scale.set(canvas.width * 0.035, canvas.height * 0.035, 1)
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true }))
+  sprite.scale.set(canvas.width * 0.014, canvas.height * 0.014, 1)
   return sprite
 }
 
