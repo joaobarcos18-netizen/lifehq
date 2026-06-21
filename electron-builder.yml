@@ -4,6 +4,7 @@ publish:
   provider: github
   owner: joaobarcos18-netizen
   repo: lifehq
+  releaseType: release
 directories:
   output: dist
   buildResources: build
