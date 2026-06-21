@@ -13,7 +13,8 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "icon": "node scripts/make-icon.js",
     "package": "electron-vite build && electron-builder --win",
-    "release": "electron-vite build && electron-builder --win --publish always"
+    "release": "electron-vite build && electron-builder --win --publish always",
+    "ship": "powershell -ExecutionPolicy Bypass -File scripts/ship.ps1"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.1",
