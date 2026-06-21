@@ -1,0 +1,60 @@
+import {
+  Archive,
+  Award,
+  Box,
+  Briefcase,
+  BookOpen,
+  Car,
+  CircleDollarSign,
+  Code,
+  FileText,
+  Film,
+  Gamepad2,
+  GraduationCap,
+  HeartPulse,
+  Home,
+  Image,
+  Plane,
+  Presentation,
+  Receipt,
+  RefreshCw,
+  ShoppingBag,
+  ShoppingCart,
+  Table,
+  TrendingUp,
+  Utensils,
+  Zap,
+  type LucideIcon
+} from 'lucide-react'
+
+const MAP: Record<string, LucideIcon> = {
+  Archive,
+  Award,
+  Box,
+  Briefcase,
+  BookOpen,
+  Car,
+  CircleDollarSign,
+  Code,
+  FileText,
+  Film,
+  Gamepad2,
+  GraduationCap,
+  HeartPulse,
+  Home,
+  Image,
+  Plane,
+  Presentation,
+  Receipt,
+  RefreshCw,
+  ShoppingBag,
+  ShoppingCart,
+  Table,
+  TrendingUp,
+  Utensils,
+  Zap
+}
+
+export function categoryIcon(name?: string): LucideIcon {
+  return (name && MAP[name]) || Box
+}

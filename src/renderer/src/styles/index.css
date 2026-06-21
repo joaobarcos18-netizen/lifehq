@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: radial-gradient(1200px 600px at 80% -10%, #16203180, transparent),
+    radial-gradient(900px 500px at -10% 110%, #1b2a1f66, transparent), #0d1119;
+  color: #e6ebf2;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #283145;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a455e;
+  background-clip: padding-box;
+}
+
+@layer components {
+  .panel {
+    @apply bg-gradient-to-b from-ink-800/80 to-ink-800/45 border border-ink-600/60 rounded-2xl backdrop-blur-sm;
+  }
+  .panel-hover {
+    @apply transition-all duration-200 hover:border-ink-500 hover:shadow-panel hover:-translate-y-0.5;
+  }
+  .input {
+    @apply w-full bg-ink-900/70 border border-ink-600 rounded-lg px-3 py-2 text-sm text-slate-100
+      placeholder:text-slate-500 outline-none focus:border-grass-500 focus:ring-2 focus:ring-grass-500/20 transition;
+  }
+  .label {
+    @apply block text-xs font-medium uppercase tracking-wide text-slate-400 mb-1.5;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+  .nav-link {
+    @apply flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-slate-400
+      transition-all duration-150 hover:text-slate-100 hover:bg-ink-700/60;
+  }
+  .nav-link-active {
+    @apply text-white bg-gradient-to-r from-grass-600/30 to-grass-500/10 border border-grass-500/30 shadow-glow;
+  }
+}
+
+/* Make text selectable inside inputs / content areas */
+input,
+textarea,
+[contenteditable],
+.selectable {
+  user-select: text;
+}
