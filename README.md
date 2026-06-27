@@ -16,6 +16,8 @@ you choose to connect an AI key.
 | **Achievements** | A timeline of your academic & professional life: degrees, certifications, training, awards, projects — with skills, links, and **attached files** (link the real diploma/certificate from your vault). One click **exports a polished CV to PDF**. |
 | **Goals & Fitness** | Life goals with progress bars and milestones, plus a fitness activity log with a trend chart. |
 | **Expenses** | Add expenses or import a bank statement (CSV). Transactions are auto-categorised, charted, and checked against monthly budgets. Add your **own categories**, and it **detects recurring subscriptions** and estimates their yearly cost. |
+| **Journal** | A line-a-day journal: date, mood, tags and notes, grouped by month. |
+| **Command Palette** | Press **Ctrl/Cmd + K** anywhere to instantly capture an expense, goal, achievement or journal note, import files, or jump to any module. |
 | **Photo World** | A 3D voxel world (à la Minecraft) with two modes. **Orbit** mode for precise building; **Walk** mode for true first-person exploration — mouse to look, WASD to move, Space to jump, and you walk *up onto* your stacked photo-towers. Place blocks / dig them out with the crosshair. Group photos into coloured, named **regions** (e.g. "Family temple", "Adventures cave"). |
 
 ## How the sorting works (the "brain")
