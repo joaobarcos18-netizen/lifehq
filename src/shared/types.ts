@@ -224,6 +224,21 @@ export interface WorldRegion {
   centerZ: number
 }
 
+/* ----------------------------- Journal ----------------------------- */
+
+export type Mood = 'great' | 'good' | 'ok' | 'low' | 'bad'
+
+export interface JournalEntry {
+  id: string
+  date: string
+  title?: string
+  body: string
+  mood?: Mood
+  tags: string[]
+  createdAt: string
+  updatedAt: string
+}
+
 /* ----------------------------- Dashboard ----------------------------- */
 
 export interface DashboardStats {
@@ -235,9 +250,14 @@ export interface DashboardStats {
   photosCount: number
   expensesThisMonth: number
   expensesCurrency: string
+  monthlyBudget: number
+  filesToReview: number
+  journalCount: number
   recentFiles: SortedFile[]
   recentAchievements: Achievement[]
   topGoals: Goal[]
+  goalsDueSoon: Goal[]
+  recentJournal: JournalEntry | null
 }
 
 /* ----------------------------- Filters ----------------------------- */
@@ -319,6 +339,11 @@ export interface LifeHqApi {
   listRegions(): Promise<WorldRegion[]>
   saveRegion(r: Partial<WorldRegion> & { name: string }): Promise<WorldRegion>
   deleteRegion(id: string): Promise<void>
+
+  // journal
+  listJournal(): Promise<JournalEntry[]>
+  saveJournal(e: Partial<JournalEntry> & { body: string }): Promise<JournalEntry>
+  deleteJournal(id: string): Promise<void>
 
   // dashboard
   getDashboardStats(): Promise<DashboardStats>

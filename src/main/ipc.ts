@@ -14,6 +14,7 @@ import type {
   FitnessLog,
   Goal,
   ImportResult,
+  JournalEntry,
   Photo,
   PhotoBlock,
   RecurringItem,
@@ -674,6 +675,41 @@ export function registerIpc(win: BrowserWindow): void {
     save()
   })
 
+  /* ----------------------------- Journal ----------------------------- */
+  handle('listJournal', () =>
+    [...db().journal].sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+  )
+
+  handle('saveJournal', (e: Partial<JournalEntry> & { body: string }) => {
+    if (e.id) {
+      const ex = db().journal.find((x) => x.id === e.id)
+      if (ex) {
+        Object.assign(ex, e, { updatedAt: new Date().toISOString() })
+        save()
+        return ex
+      }
+    }
+    const now = new Date().toISOString()
+    const created: JournalEntry = {
+      id: newId(),
+      date: e.date ?? now.slice(0, 10),
+      title: e.title,
+      body: e.body,
+      mood: e.mood,
+      tags: e.tags ?? [],
+      createdAt: now,
+      updatedAt: now
+    }
+    db().journal.push(created)
+    save()
+    return created
+  })
+
+  handle('deleteJournal', (id: string) => {
+    db().journal = db().journal.filter((x) => x.id !== id)
+    save()
+  })
+
   /* ----------------------------- Dashboard ----------------------------- */
   handle('getDashboardStats', (): DashboardStats => {
     const d = db()
@@ -682,6 +718,13 @@ export function registerIpc(win: BrowserWindow): void {
     const expensesThisMonth = d.expenses
       .filter((e) => e.date.startsWith(month) && e.categoryId !== 'income')
       .reduce((s, e) => s + Math.abs(e.amount), 0)
+    const monthlyBudget = d.expenseCategories.reduce((s, c) => s + (c.budgetMonthly ?? 0), 0)
+    const in14 = new Date(Date.now() + 14 * 864e5).toISOString().slice(0, 10)
+    const today = new Date().toISOString().slice(0, 10)
+    const goalsDueSoon = d.goals
+      .filter((g) => g.status === 'active' && g.dueDate && g.dueDate >= today && g.dueDate <= in14)
+      .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
+    const recentJournal = [...d.journal].sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0] ?? null
     return {
       filesCount: d.files.length,
       achievementsCount: d.achievements.length,
@@ -691,9 +734,14 @@ export function registerIpc(win: BrowserWindow): void {
       photosCount: d.photos.length,
       expensesThisMonth,
       expensesCurrency: DEFAULT_CURRENCY,
+      monthlyBudget,
+      filesToReview: d.files.filter((f) => f.confidence < 0.55).length,
+      journalCount: d.journal.length,
       recentFiles: [...d.files].sort((a, b) => b.importedAt.localeCompare(a.importedAt)).slice(0, 5),
       recentAchievements: [...d.achievements].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 5),
-      topGoals: d.goals.filter((g) => g.status === 'active').slice(0, 4)
+      topGoals: d.goals.filter((g) => g.status === 'active').slice(0, 4),
+      goalsDueSoon,
+      recentJournal
     }
   })
 

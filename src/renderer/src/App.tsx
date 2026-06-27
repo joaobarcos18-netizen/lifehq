@@ -1,4 +1,4 @@
-import { Boxes, Dumbbell, FolderTree, LayoutDashboard, Settings as SettingsIcon, Trophy, Wallet } from 'lucide-react'
+import { BookOpen, Boxes, Command, Dumbbell, FolderTree, LayoutDashboard, Settings as SettingsIcon, Trophy, Wallet } from 'lucide-react'
 import { NavLink, Route, Routes } from 'react-router-dom'
 import { clsx } from 'clsx'
 import { useAsync } from './lib/useAsync'
@@ -8,9 +8,11 @@ import Sorter from './modules/sorter/Sorter'
 import Achievements from './modules/achievements/Achievements'
 import GoalsFitness from './modules/fitness/GoalsFitness'
 import Expenses from './modules/expenses/Expenses'
+import Journal from './modules/journal/Journal'
 import PhotoWorld from './modules/photos/PhotoWorld'
 import Settings from './modules/settings/Settings'
 import Onboarding from './modules/onboarding/Onboarding'
+import CommandPalette from './components/CommandPalette'
 
 const NAV = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
@@ -18,6 +20,7 @@ const NAV = [
   { to: '/achievements', label: 'Achievements', icon: Trophy },
   { to: '/goals', label: 'Goals & Fitness', icon: Dumbbell },
   { to: '/expenses', label: 'Expenses', icon: Wallet },
+  { to: '/journal', label: 'Journal', icon: BookOpen },
   { to: '/world', label: 'Photo World', icon: Boxes },
   { to: '/settings', label: 'Settings', icon: SettingsIcon }
 ]
@@ -30,6 +33,7 @@ export default function App() {
       {settings && !settings.onboardingComplete && (
         <Onboarding settings={settings} onDone={reloadSettings} />
       )}
+      <CommandPalette />
       {/* Sidebar */}
       <aside className="flex w-64 shrink-0 flex-col border-r border-ink-700/80 bg-ink-900/80 px-3 py-5">
         <div className="mb-7 flex items-center gap-3 px-2">
@@ -56,7 +60,15 @@ export default function App() {
           ))}
         </nav>
 
-        <div className="mt-4 rounded-xl border border-ink-700 bg-ink-800/60 px-3 py-3">
+        <button
+          onClick={() => window.dispatchEvent(new Event('open-command-palette'))}
+          className="mt-4 flex items-center gap-2 rounded-xl border border-ink-700 bg-ink-800/60 px-3 py-2.5 text-sm text-slate-400 transition hover:border-ink-600 hover:text-white"
+        >
+          <Command className="h-4 w-4" /> Quick actions
+          <span className="ml-auto rounded border border-ink-600 px-1.5 py-0.5 text-[10px]">Ctrl K</span>
+        </button>
+
+        <div className="mt-2 rounded-xl border border-ink-700 bg-ink-800/60 px-3 py-3">
           <div className="text-sm font-medium text-slate-200">
             {settings?.displayName ? settings.displayName : 'Welcome'}
           </div>
@@ -78,6 +90,7 @@ export default function App() {
             <Route path="/achievements" element={<Achievements />} />
             <Route path="/goals" element={<GoalsFitness />} />
             <Route path="/expenses" element={<Expenses />} />
+            <Route path="/journal" element={<Journal />} />
             <Route path="/world" element={<PhotoWorld />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

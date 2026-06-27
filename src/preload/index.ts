@@ -69,6 +69,11 @@ const api: LifeHqApi = {
   saveRegion: (r) => invoke('saveRegion', r) as Promise<never>,
   deleteRegion: (id) => invoke('deleteRegion', id) as Promise<never>,
 
+  // journal
+  listJournal: () => invoke('listJournal') as Promise<never>,
+  saveJournal: (e) => invoke('saveJournal', e) as Promise<never>,
+  deleteJournal: (id) => invoke('deleteJournal', id) as Promise<never>,
+
   // dashboard
   getDashboardStats: () => invoke('getDashboardStats') as Promise<never>,
 

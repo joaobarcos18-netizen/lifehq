@@ -1,8 +1,11 @@
 import {
   ArrowRight,
+  BookOpen,
   Boxes,
+  CalendarClock,
   Dumbbell,
   FileText,
+  FileWarning,
   FolderTree,
   Sparkles,
   Target,
@@ -100,6 +103,81 @@ export default function Dashboard() {
           accent="#34d399"
           onClick={() => nav('/expenses')}
         />
+      </div>
+
+      {/* Smart widgets */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        {/* This month */}
+        <Panel>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="flex items-center gap-2 font-semibold text-white">
+              <Wallet className="h-4 w-4 text-grass-400" /> This month
+            </h2>
+            <button onClick={() => nav('/expenses')} className="text-xs text-slate-500 hover:text-slate-300">
+              Details →
+            </button>
+          </div>
+          {stats.monthlyBudget > 0 ? (
+            <>
+              <div className="mb-1.5 flex items-baseline justify-between text-sm">
+                <span className="text-slate-300">{formatCurrency(stats.expensesThisMonth, stats.expensesCurrency)} spent</span>
+                <span className="text-xs text-slate-500">of {formatCurrency(stats.monthlyBudget, stats.expensesCurrency)} budget</span>
+              </div>
+              <ProgressBar
+                value={(stats.expensesThisMonth / stats.monthlyBudget) * 100}
+                color={stats.expensesThisMonth > stats.monthlyBudget ? '#f43f5e' : '#7cc576'}
+              />
+            </>
+          ) : (
+            <p className="text-sm text-slate-500">
+              {formatCurrency(stats.expensesThisMonth, stats.expensesCurrency)} spent this month. Set category budgets in Expenses to track them here.
+            </p>
+          )}
+          {stats.filesToReview > 0 && (
+            <button
+              onClick={() => nav('/sorter')}
+              className="mt-4 flex w-full items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-left text-sm text-amber-300 transition hover:bg-amber-500/15"
+            >
+              <FileWarning className="h-4 w-4 shrink-0" />
+              {stats.filesToReview} file{stats.filesToReview === 1 ? '' : 's'} sorted with low confidence — review?
+              <ArrowRight className="ml-auto h-4 w-4" />
+            </button>
+          )}
+        </Panel>
+
+        {/* Due soon + journal */}
+        <Panel>
+          <h2 className="mb-3 flex items-center gap-2 font-semibold text-white">
+            <CalendarClock className="h-4 w-4 text-ember-400" /> Coming up
+          </h2>
+          {stats.goalsDueSoon.length > 0 ? (
+            <ul className="space-y-2">
+              {stats.goalsDueSoon.slice(0, 3).map((g) => (
+                <li key={g.id} className="flex items-center gap-2 text-sm">
+                  <span className="h-1.5 w-1.5 rounded-full bg-ember-400" />
+                  <span className="truncate text-slate-200">{g.title}</span>
+                  <span className="ml-auto shrink-0 text-xs text-slate-500">due {formatDate(g.dueDate)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-slate-500">No goal deadlines in the next two weeks. 🎉</p>
+          )}
+          <button
+            onClick={() => nav('/journal')}
+            className="mt-4 flex w-full items-start gap-2.5 rounded-lg border border-ink-700 bg-ink-900/40 px-3 py-2.5 text-left transition hover:border-ink-600"
+          >
+            <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-sky-400" />
+            {stats.recentJournal ? (
+              <span className="min-w-0">
+                <span className="block truncate text-sm text-slate-200">{stats.recentJournal.title || stats.recentJournal.body}</span>
+                <span className="text-xs text-slate-500">last note · {formatDate(stats.recentJournal.date)}</span>
+              </span>
+            ) : (
+              <span className="text-sm text-slate-400">Write today&apos;s journal note →</span>
+            )}
+          </button>
+        </Panel>
       </div>
 
       <div className="grid gap-5 lg:grid-cols-3">

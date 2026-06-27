@@ -5,6 +5,7 @@ import type {
   FileCategory,
   FitnessLog,
   Goal,
+  JournalEntry,
   Photo,
   PhotoBlock,
   SortedFile,
@@ -22,6 +23,7 @@ export interface DatabaseShape {
   photos: Photo[]
   photoBlocks: PhotoBlock[]
   regions: WorldRegion[]
+  journal: JournalEntry[]
 }
 
 /** Built-in file categories — the "chests" the sorter drops files into. */
@@ -180,6 +182,7 @@ export function defaultData(): DatabaseShape {
     expenseCategories: SEED_EXPENSE_CATEGORIES.map((c) => ({ ...c })),
     photos: [],
     photoBlocks: [],
-    regions: SEED_REGIONS.map((r) => ({ ...r }))
+    regions: SEED_REGIONS.map((r) => ({ ...r })),
+    journal: []
   }
 }
